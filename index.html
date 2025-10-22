@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2025年10月销售日历</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: -apple-system, Arial, sans-serif; margin: 0; padding: 10px; background: #f4f4f4; }
+        h1 { text-align: center; font-size: 1.2em; }
+        .calendar { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .day { border: 1px solid #ddd; background: white; padding: 5px; }
+        .day-header { font-weight: bold; font-size: 0.8em; text-align: center; }
+        .day canvas { width: 100% !important; height: 80px !important; }
+        .empty { background: #f9f9f9; }
+        .controls { text-align: center; margin: 10px 0; }
+        .controls button { padding: 6px 12px; background: #007bff; color: white; border: none; border-radius: 3px; font-size: 0.8em; }
+        .edit-modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; }
+        .edit-content { background: white; padding: 15px; border-radius: 5px; width: 80%; max-width: 280px; }
+        .edit-content label { font-size: 0.8em; }
+        .edit-content input { width: 100%; margin: 5px 0; padding: 5px; font-size: 0.8em; }
+        .edit-content button { padding: 5px 10px; margin: 5px; font-size: 0.8em; }
+    </style>
+</head>
+<body>
+    <h1>2025年10月销售日历</h1>
+    <div class="controls">
+        <button onclick="saveData()">保存数据</button>
+        <button onclick="loadData()">加载数据</button>
+    </div>
+    <div class="calendar"></div>
+    <div class="edit-modal" id="editModal">
+        <div class="edit-content">
+            <h3>编辑 10月<span id="editDayNum"></span>日</h3>
+            <label>杯售数量:</label><input type="number" id="editCups" min="0">
+            <label>瓶售数量:</label><input type="number" id="editBottles" min="0">
+            <label>客人总数:</label><input type="number" id="editGuests" min="0">
+            <label>总桌数:</label><input type="number" id="editTables" min="0">
+            <button onclick="saveEdit()">保存</button>
+            <button onclick="closeModal()">取消</button>
+        </div>
+    </div>
+    <script>
+        let data = [
+            { day: 1, cups: 12, bottles: 0, guests: 487, tables: 203 },
+            { day: 2, cups: 14, bottles: 3, guests: 443, tables: 178 },
+            { day: 3, cups: 8, bottles: 0, guests: 410, tables: 192 },
+            { day: 4, cups: 8, bottles: 3, guests: 331, tables: 136 },
+            { day: 5, cups: 6, bottles: 2, guests: 334, tables: 153 },
+            { day: 6, cups: 19, bottles: 1, guests: 424, tables: 158 },
+            { day: 7, cups: 19, bottles: 3, guests: 525, tables: 205 },
+            { day: 8, cups: 20, bottles: 1, guests: 261, tables: 100 },
+            { day: 9, cups: 10, bottles: 4, guests: 91, tables: 54 },
+            { day: 10, cups: 9, bottles: 1, guests: 146, tables: 80 },
+            { day: 11, cups: 14, bottles: 4, guests: 268, tables: 128 },
+            { day: 12, cups: 15, bottles: 0, guests: 519, tables: 218 },
+            { day: 13, cups: 11, bottles: 0, guests: 156, tables: 90 },
+            { day: 14, cups: 2, bottles: 0, guests: 213, tables: 108 },
+            { day: 15, cups: 10, bottles: 2, guests: 172, tables: 99 },
+            { day: 16, cups: 18, bottles: 3, guests: 172, tables: 95 },
+            { day: 17, cups: 15, bottles: 0, guests: 212, tables: 109 },
+            { day: 18, cups: 18, bottles: 0, guests: 397, tables: 178 },
+            { day: 19, cups: 17, bottles: 1, guests: 408, tables: 170 },
+            { day: 20, cups: 13, bottles: 6, guests: 172, tables: 84 },
+            { day: 21, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 22, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 23, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 24, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 25, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 26, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 27, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 28, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 29, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 30, cups: 0, bottles: 0, guests: 0, tables: 0 },
+            { day: 31, cups: 0, bottles: 0, guests: 0, tables: 0 }
+        ];
+        const firstDayOfMonth = 3; // 10月1日为周三
+        const calendar = document.querySelector('.calendar');
+        let currentEditDay = null;
+
+        function renderCalendar() {
+            calendar.innerHTML = '';
+            ['日', '一', '二', '三', '四', '五', '六'].forEach(day => {
+                const header = document.createElement('div');
+                header.textContent = day;
+                header.style.fontWeight = 'bold';
+                header.style.textAlign = 'center';
+                header.style.fontSize = '0.8em';
+                calendar.appendChild(header);
+            });
+            for (let i = 0; i < firstDayOfMonth; i++) {
+                const empty = document.createElement('div');
+                empty.classList.add('day', 'empty');
+                calendar.appendChild(empty);
+            }
+            data.forEach((item, index) => {
+                const dayDiv = document.createElement('div');
+                dayDiv.classList.add('day');
+                const header = document.createElement('div');
+                header.classList.add('day-header');
+                header.textContent = item.day;
+                dayDiv.appendChild(header);
+                const canvas = document.createElement('canvas');
+                dayDiv.appendChild(canvas);
+                dayDiv.addEventListener('click', () => openEditModal(index + 1));
+                calendar.appendChild(dayDiv);
+                renderChart(canvas, item);
+            });
+        }
+
+        function renderChart(canvas, item) {
+            new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: ['杯售', '瓶售', '客人', '桌数'],
+                    datasets: [{
+                        label: '数据',
+                        data: [item.cups, item.bottles, item.guests, item.tables],
+                        backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0']
+                    }]
+                },
+                options: {
+                    scales: { y: { beginAtZero: true, max: 600 } },
+                    plugins: { legend: { display: false } },
+                    responsive: true,
+                    maintainAspectRatio: false
+                }
+            });
+        }
+
+        function openEditModal(day) {
+            currentEditDay = day - 1;
+            const item = data[currentEditDay];
+            document.getElementById('editDayNum').textContent = day;
+            document.getElementById('editCups').value = item.cups;
+            document.getElementById('editBottles').value = item.bottles;
+            document.getElementById('editGuests').value = item.guests;
+            document.getElementById('editTables').value = item.tables;
+            document.getElementById('editModal').style.display = 'flex';
+        }
+
+        function saveEdit() {
+            const item = data[currentEditDay];
+            item.cups = parseInt(document.getElementById('editCups').value) || 0;
+            item.bottles = parseInt(document.getElementById('editBottles').value) || 0;
+            item.guests = parseInt(document.getElementById('editGuests').value) || 0;
+            item.tables = parseInt(document.getElementById('editTables').value) || 0;
+            closeModal();
+            renderCalendar();
+        }
+
+        function closeModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+
+        function saveData() {
+            localStorage.setItem('octoberSalesData', JSON.stringify(data));
+            alert('数据已保存！');
+        }
+
+        function loadData() {
+            const saved = localStorage.getItem('octoberSalesData');
+            if (saved) {
+                data = JSON.parse(saved);
+                renderCalendar();
+                alert('数据已加载！');
+            }
+        }
+
+        renderCalendar();
+    </script>
+</body>
+</html>
